@@ -1,104 +1,59 @@
 # Runway
 
-Get from OpenAPI docs to your first working API call in under a minute.
+**Stop reading API docs. Start making requests.**
 
-## What it does
+Ever spent 30 minutes just trying to figure out how to authenticate with a new API? Runway fixes that. Paste an OpenAPI spec, get a working request in 10 seconds.
 
-Runway takes an OpenAPI or Swagger spec and generates a focused Quick Start guide. No more digging through hundreds of endpoints to figure out how to authenticate and make your first request.
+## The Problem
 
-Paste a spec URL, and Runway will:
-- Pick the simplest endpoint to test (like `/health`, `/me`, or `/ping`)
-- Detect the authentication method and show you how to set it up
-- Generate ready-to-use code snippets in curl, JavaScript, and Python
-- Let you test the API directly in the browser
+You find an API you want to use. The docs have 200 endpoints. You scroll through looking for the auth section. You find three different authentication methods. You're not sure which one applies to your use case. You copy some curl command, replace the placeholders, get a 401. Try again. Another 401. Check the headers. Realize you needed a different auth scheme.
 
-## How it works
+Sound familiar?
 
-**1. Input** — You paste an OpenAPI spec URL or raw JSON
+## The Solution
 
-**2. Server parses the spec** — The API route (`/api/parse`) uses `@readme/openapi-parser` to validate and dereference the spec. This runs entirely on the server as a React Server Component pattern.
+Runway reads the OpenAPI spec and does the work for you:
 
-**3. Smart endpoint selection** — The `endpoint-picker` scores all endpoints and picks the one that's easiest to test. It prefers GET requests, endpoints with no required parameters, and common patterns like `/health` or `/users/me`.
+- **Finds the simplest endpoint** - Usually something like `/health`, `/me`, or `/users` that you can hit right away
+- **Figures out the auth** - API key? Bearer token? OAuth2? Runway detects it and tells you exactly what to set
+- **Generates working code** - Copy-paste curl, JavaScript, or Python. No placeholders to guess at.
+- **Test it live** - Hit the API directly from your browser and see the response
 
-**4. Auth detection** — The `auth-detector` reads the security schemes from the spec and figures out if you need an API key, Bearer token, Basic auth, or OAuth2. It generates the exact setup instructions.
-
-**5. Code generation** — The `snippet-generator` builds working code for curl, JavaScript fetch, and Python requests. All the auth headers and placeholders are filled in.
-
-**6. Output** — You see a clean Quick Start guide with copy-paste snippets and an interactive tester.
-
-## Data flow
-
-```
-User Input (URL or JSON)
-       │
-       ▼
-┌──────────────────────┐
-│  /api/parse (Server) │  ← Runs on server only
-│  - Fetch + validate  │
-│  - Dereference $refs │
-│  - Pick best endpoint│
-└──────────────────────┘
-       │
-       ▼
-┌──────────────────────┐
-│  Client Component    │  ← Receives minimal data
-│  - Display guide     │
-│  - Generate snippets │
-│  - Handle Try It     │
-└──────────────────────┘
-       │
-       ▼
-┌──────────────────────┐
-│  /api/proxy (Server) │  ← CORS proxy for Try It
-│  - Forward request   │
-│  - Return response   │
-└──────────────────────┘
-```
-
-The heavy lifting (parsing, validation, dereferencing) happens on the server. The client only receives the processed data it needs to render the UI.
-
-## Running locally
+## Quick Start
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open http://localhost:3000
+Open http://localhost:3000 and paste any OpenAPI spec URL.
 
-## Try it with these APIs
+Try it with the PetStore API:
+```
+https://petstore3.swagger.io/api/v3/openapi.json
+```
 
-- PetStore: `https://petstore3.swagger.io/api/v3/openapi.json`
-- Or paste any OpenAPI 3.x or Swagger 2.x spec
+## How It Works
 
-## Tech stack
+```
+You paste a spec URL
+        ↓
+Server fetches and parses it (all the heavy work)
+        ↓
+You get a Quick Start guide with:
+   • Auth setup instructions
+   • Working code snippets
+   • Interactive API tester
+```
 
-- Next.js 16 with App Router and React Server Components
+The parsing happens server-side using React Server Components. Your browser only gets the final result - no huge OpenAPI specs being shipped to the client.
+
+## Built With
+
+- Next.js 16 (App Router, RSC, Turbopack)
 - TypeScript
-- Tailwind CSS and shadcn/ui
-- @readme/openapi-parser for spec parsing
-
-## Project structure
-
-```
-src/
-├── app/
-│   ├── api/parse/       # Server-side spec parsing
-│   ├── api/proxy/       # CORS proxy for Try It
-│   ├── page.tsx         # Main page (client component)
-│   └── layout.tsx       # Root layout (server component)
-├── components/
-│   ├── spec-input.tsx   # URL/JSON input form
-│   ├── quick-start-guide.tsx
-│   ├── code-block.tsx
-│   ├── endpoint-selector.tsx
-│   └── try-it-panel.tsx
-└── lib/openapi/
-    ├── parser.ts        # Parse and validate specs
-    ├── endpoint-picker.ts
-    ├── auth-detector.ts
-    └── snippet-generator.ts
-```
+- Tailwind CSS + shadcn/ui
+- @readme/openapi-parser
 
 ## License
 
