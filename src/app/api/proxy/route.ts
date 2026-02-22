@@ -67,18 +67,19 @@ export async function POST(request: Request) {
 			responseHeaders[key] = value;
 		});
 
-		// Try to parse as JSON, fall back to text
-		let data: unknown;
+		// Read body once (can only be consumed a single time)
+		const raw = await response.text();
 		const contentType = response.headers.get('content-type') || '';
 
+		let data: unknown;
 		if (contentType.includes('application/json')) {
 			try {
-				data = await response.json();
+				data = JSON.parse(raw);
 			} catch {
-				data = await response.text();
+				data = raw;
 			}
 		} else {
-			data = await response.text();
+			data = raw;
 		}
 
 		return NextResponse.json({

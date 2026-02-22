@@ -55,8 +55,8 @@ export function SpecInput({ onSubmit, isLoading, error }: SpecInputProps) {
 	);
 
 	return (
-		<Card className="w-full max-w-2xl mx-auto">
-			<CardHeader className="text-center">
+		<Card className="w-full max-w-2xl mx-auto border-2 border-border shadow-lg shadow-primary/5">
+			<CardHeader className="text-center pb-2">
 				<CardTitle className="text-3xl font-bold flex items-center justify-center gap-2">
 					<Zap className="h-8 w-8 text-primary" />
 					Runway
@@ -128,7 +128,7 @@ export function SpecInput({ onSubmit, isLoading, error }: SpecInputProps) {
 				<Button
 					onClick={handleSubmit}
 					disabled={isLoading || (!url && !json)}
-					className="w-full"
+					className="w-full bg-primary hover:bg-primary/90 shadow-md shadow-primary/20"
 					size="lg"
 				>
 					{isLoading ? (
