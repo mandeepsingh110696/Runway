@@ -8,9 +8,11 @@ import type { ParsedEndpoint, ParsedSpec } from '@/types/openapi';
 interface ParseResult {
 	spec: ParsedSpec;
 	bestEndpoint: ParsedEndpoint;
+	slug: string | null;
+	specUrl: string | null;
 }
 
-export default function Home() {
+export default function AppPage() {
 	const [result, setResult] = useState<ParseResult | null>(null);
 	const [isLoading, setIsLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
@@ -32,7 +34,10 @@ export default function Home() {
 				throw new Error(data.error || 'Failed to parse spec');
 			}
 
-			setResult(data);
+			setResult({
+				...data,
+				specUrl: input.startsWith('http') ? input : null,
+			});
 		} catch (err) {
 			setError(err instanceof Error ? err.message : 'An error occurred');
 		} finally {
@@ -52,6 +57,8 @@ export default function Home() {
 					spec={result.spec}
 					initialEndpoint={result.bestEndpoint}
 					onReset={handleReset}
+					slug={result.slug}
+					specUrl={result.specUrl}
 				/>
 			) : (
 				<div className="flex items-center justify-center min-h-[80vh]">
