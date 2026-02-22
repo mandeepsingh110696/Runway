@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server';
 import { pickBestEndpoint } from '@/lib/openapi';
 import { parseOpenAPISpec } from '@/lib/openapi/parser';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { extractDomain, generateSlug } from '@/lib/utils/slug';
 
 export async function POST(request: Request) {
 	try {
-		const { input } = await request.json();
+		const { input, save = true } = await request.json();
 
 		if (!input || typeof input !== 'string') {
 			return NextResponse.json(
@@ -23,9 +25,45 @@ export async function POST(request: Request) {
 			);
 		}
 
+		let slug: string | null = null;
+
+		if (save) {
+			const supabase = await createAdminClient();
+			const {
+				data: { user },
+			} = await supabase.auth.getUser();
+
+			const specUrl = input.startsWith('http') ? input : null;
+			slug = generateSlug();
+
+			const { error: insertError } = await supabase.from('guides').insert({
+				slug,
+				api_name: spec.title,
+				spec_url: specUrl,
+				parsed_data: { spec, bestEndpoint },
+				user_id: user?.id ?? null,
+			});
+
+			if (insertError) {
+				console.error('Failed to save guide:', insertError);
+				slug = null;
+			} else {
+				const domain = extractDomain(specUrl);
+				if (domain) {
+					await supabase.from('events').insert({
+						guide_id: null,
+						event_type: 'guide_created',
+						api_domain: domain,
+						metadata: { api_name: spec.title },
+					});
+				}
+			}
+		}
+
 		return NextResponse.json({
 			spec,
 			bestEndpoint,
+			slug,
 		});
 	} catch (error) {
 		console.error('Parse error:', error);
