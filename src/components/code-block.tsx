@@ -8,21 +8,23 @@ interface CodeBlockProps {
 	code: string;
 	language: string;
 	title?: string;
+	onCopy?: () => void;
 }
 
-export function CodeBlock({ code, language, title }: CodeBlockProps) {
+export function CodeBlock({ code, language, title, onCopy }: CodeBlockProps) {
 	const [copied, setCopied] = useState(false);
 
 	const handleCopy = useCallback(async () => {
 		await navigator.clipboard.writeText(code);
 		setCopied(true);
 		setTimeout(() => setCopied(false), 2000);
-	}, [code]);
+		onCopy?.();
+	}, [code, onCopy]);
 
 	return (
-		<div className="relative group rounded-lg border bg-muted/50 overflow-hidden">
+		<div className="relative group rounded-lg border border-border bg-muted/50 overflow-hidden shadow-sm">
 			{title && (
-				<div className="px-4 py-2 border-b bg-muted/80 flex items-center justify-between">
+				<div className="px-4 py-2 border-b border-border bg-primary-muted/20 flex items-center justify-between">
 					<span className="text-sm font-medium text-muted-foreground">{title}</span>
 					<span className="text-xs text-muted-foreground uppercase">{language}</span>
 				</div>

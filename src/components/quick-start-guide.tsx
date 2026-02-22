@@ -4,12 +4,14 @@ import { ArrowLeft, Download, FileCode, Key, Server, Terminal, Zap } from 'lucid
 import { useCallback, useMemo, useState } from 'react';
 import { CodeBlock } from '@/components/code-block';
 import { EndpointSelector } from '@/components/endpoint-selector';
+import { ShareButton } from '@/components/share-button';
 import { TryItPanel } from '@/components/try-it-panel';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { trackSnippetCopy, trackTryItUsed } from '@/lib/analytics';
 import { detectAuth, generateSnippets, getAlternativeEndpoints } from '@/lib/openapi';
 import type { ParsedEndpoint, ParsedSpec, SnippetFormat } from '@/types/openapi';
 
@@ -17,9 +19,17 @@ interface QuickStartGuideProps {
 	spec: ParsedSpec;
 	initialEndpoint: ParsedEndpoint;
 	onReset: () => void;
+	slug?: string | null;
+	specUrl?: string | null;
 }
 
-export function QuickStartGuide({ spec, initialEndpoint, onReset }: QuickStartGuideProps) {
+export function QuickStartGuide({
+	spec,
+	initialEndpoint,
+	onReset,
+	slug,
+	specUrl,
+}: QuickStartGuideProps) {
 	const [selectedEndpoint, setSelectedEndpoint] = useState(initialEndpoint);
 	const [activeFormat, setActiveFormat] = useState<SnippetFormat>('curl');
 	const [showTryIt, setShowTryIt] = useState(false);
@@ -62,14 +72,17 @@ export function QuickStartGuide({ spec, initialEndpoint, onReset }: QuickStartGu
 					<ArrowLeft className="h-4 w-4" />
 					New spec
 				</Button>
-				<Button variant="outline" onClick={handleExportMarkdown} className="gap-2">
-					<Download className="h-4 w-4" />
-					Export Markdown
-				</Button>
+				<div className="flex items-center gap-2">
+					{slug && <ShareButton slug={slug} specUrl={specUrl} />}
+					<Button variant="outline" onClick={handleExportMarkdown} className="gap-2">
+						<Download className="h-4 w-4" />
+						Export Markdown
+					</Button>
+				</div>
 			</div>
 
 			{/* API Info */}
-			<Card>
+			<Card className="border-l-4 border-l-primary shadow-sm">
 				<CardHeader>
 					<div className="flex items-start justify-between">
 						<div>
@@ -79,7 +92,10 @@ export function QuickStartGuide({ spec, initialEndpoint, onReset }: QuickStartGu
 							</CardTitle>
 							<p className="text-sm text-muted-foreground mt-1">v{spec.version}</p>
 						</div>
-						<Badge variant="outline" className="flex items-center gap-1">
+						<Badge
+							variant="outline"
+							className="flex items-center gap-1 border-primary/30 text-primary"
+						>
 							<Server className="h-3 w-3" />
 							{baseUrl}
 						</Badge>
@@ -89,7 +105,7 @@ export function QuickStartGuide({ spec, initialEndpoint, onReset }: QuickStartGu
 			</Card>
 
 			{/* Endpoint Selector */}
-			<Card>
+			<Card className="shadow-sm">
 				<CardContent className="pt-6">
 					<EndpointSelector
 						endpoints={alternativeEndpoints}
@@ -101,10 +117,10 @@ export function QuickStartGuide({ spec, initialEndpoint, onReset }: QuickStartGu
 
 			{/* Step 1: Auth Setup */}
 			{auth && (
-				<Card>
+				<Card className="shadow-sm bg-accent-muted/30 border-accent/20">
 					<CardHeader>
 						<CardTitle className="text-lg flex items-center gap-2">
-							<Key className="h-5 w-5" />
+							<Key className="h-5 w-5 text-primary" />
 							Step 1: Set up authentication
 						</CardTitle>
 					</CardHeader>
@@ -125,10 +141,10 @@ export function QuickStartGuide({ spec, initialEndpoint, onReset }: QuickStartGu
 			)}
 
 			{/* Step 2: First Request */}
-			<Card>
+			<Card className="shadow-sm">
 				<CardHeader>
 					<CardTitle className="text-lg flex items-center gap-2">
-						<Terminal className="h-5 w-5" />
+						<Terminal className="h-5 w-5 text-primary" />
 						{auth ? 'Step 2: Make your first request' : 'Step 1: Make your first request'}
 					</CardTitle>
 				</CardHeader>
@@ -164,7 +180,17 @@ export function QuickStartGuide({ spec, initialEndpoint, onReset }: QuickStartGu
 
 						{snippets.map((snippet) => (
 							<TabsContent key={snippet.format} value={snippet.format}>
-								<CodeBlock code={snippet.code} language={snippet.language} />
+								<CodeBlock
+									code={snippet.code}
+									language={snippet.language}
+									onCopy={() =>
+										trackSnippetCopy(
+											undefined,
+											snippet.format as 'curl' | 'fetch' | 'python',
+											specUrl,
+										)
+									}
+								/>
 							</TabsContent>
 						))}
 					</Tabs>
@@ -172,18 +198,32 @@ export function QuickStartGuide({ spec, initialEndpoint, onReset }: QuickStartGu
 			</Card>
 
 			{/* Step 3: Try It */}
-			<Card>
+			<Card className="shadow-sm border-primary/10">
 				<CardHeader>
 					<CardTitle className="text-lg flex items-center gap-2">
-						<Zap className="h-5 w-5" />
+						<Zap className="h-5 w-5 text-primary" />
 						{auth ? 'Step 3: Try it live' : 'Step 2: Try it live'}
 					</CardTitle>
 				</CardHeader>
 				<CardContent>
 					{showTryIt ? (
-						<TryItPanel endpoint={selectedEndpoint} baseUrl={baseUrl} auth={auth} />
+						<TryItPanel
+							endpoint={selectedEndpoint}
+							baseUrl={baseUrl}
+							auth={auth}
+							onRequestSent={() =>
+								trackTryItUsed(
+									undefined,
+									`${selectedEndpoint.method} ${selectedEndpoint.path}`,
+									specUrl,
+								)
+							}
+						/>
 					) : (
-						<Button onClick={() => setShowTryIt(true)} className="w-full">
+						<Button
+							onClick={() => setShowTryIt(true)}
+							className="w-full bg-primary hover:bg-primary/90 shadow-md shadow-primary/20"
+						>
 							<Zap className="mr-2 h-4 w-4" />
 							Open Interactive Tester
 						</Button>
@@ -244,7 +284,7 @@ function generateMarkdown(
 	);
 
 	for (const snippet of snippets) {
-		lines.push(`### ${snippet.format}`, '', '```' + snippet.language, snippet.code, '```', '');
+		lines.push(`### ${snippet.format}`, '', `\`\`\`${snippet.language}`, snippet.code, '```', '');
 	}
 
 	return lines.join('\n');

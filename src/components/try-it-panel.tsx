@@ -14,6 +14,7 @@ interface TryItPanelProps {
 	endpoint: ParsedEndpoint;
 	baseUrl: string;
 	auth: AuthInfo | null;
+	onRequestSent?: () => void;
 }
 
 interface ApiResponse {
@@ -24,7 +25,7 @@ interface ApiResponse {
 	duration: number;
 }
 
-export function TryItPanel({ endpoint, baseUrl, auth }: TryItPanelProps) {
+export function TryItPanel({ endpoint, baseUrl, auth, onRequestSent }: TryItPanelProps) {
 	const [apiKey, setApiKey] = useState('');
 	const [isLoading, setIsLoading] = useState(false);
 	const [response, setResponse] = useState<ApiResponse | null>(null);
@@ -88,13 +89,14 @@ export function TryItPanel({ endpoint, baseUrl, auth }: TryItPanelProps) {
 					headers: result.headers || {},
 					duration,
 				});
+				onRequestSent?.();
 			}
 		} catch (err) {
 			setError(err instanceof Error ? err.message : 'Request failed');
 		} finally {
 			setIsLoading(false);
 		}
-	}, [baseUrl, endpoint, auth, apiKey]);
+	}, [baseUrl, endpoint, auth, apiKey, onRequestSent]);
 
 	return (
 		<div className="space-y-4">
@@ -112,7 +114,8 @@ export function TryItPanel({ endpoint, baseUrl, auth }: TryItPanelProps) {
 						onChange={(e) => setApiKey(e.target.value)}
 					/>
 					<p className="text-xs text-muted-foreground">
-						Your key is sent directly to the API and never stored. Some public APIs work without auth.
+						Your key is sent directly to the API and never stored. Some public APIs work without
+						auth.
 					</p>
 				</div>
 			)}
@@ -129,11 +132,7 @@ export function TryItPanel({ endpoint, baseUrl, auth }: TryItPanelProps) {
 			</div>
 
 			{/* Send button */}
-			<Button
-				onClick={handleSendRequest}
-				disabled={isLoading}
-				className="w-full"
-			>
+			<Button onClick={handleSendRequest} disabled={isLoading} className="w-full">
 				{isLoading ? (
 					<>
 						<Loader2 className="mr-2 h-4 w-4 animate-spin" />
