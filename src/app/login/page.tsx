@@ -96,13 +96,12 @@ function LoginForm() {
 					Continue with GitHub
 				</Button>
 
-				<div className="relative">
-					<div className="absolute inset-0 flex items-center">
-						<span className="w-full border-t" />
-					</div>
-					<div className="relative flex justify-center text-xs uppercase">
-						<span className="bg-background px-2 text-muted-foreground">Or continue with</span>
-					</div>
+				<div className="relative flex items-center gap-3">
+					<div className="flex-1 h-px bg-border" />
+					<span className="text-sm text-muted-foreground/80 font-medium tracking-wide">
+						Or continue with email
+					</span>
+					<div className="flex-1 h-px bg-border" />
 				</div>
 
 				<form onSubmit={handleMagicLink} className="space-y-4">
