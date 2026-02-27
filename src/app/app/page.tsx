@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useState } from 'react';
+import { toast } from 'sonner';
 import { QuickStartGuide } from '@/components/quick-start-guide';
 import { SpecInput } from '@/components/spec-input';
 import type { ParsedEndpoint, ParsedSpec } from '@/types/openapi';
@@ -38,6 +39,7 @@ export default function AppPage() {
 				...data,
 				specUrl: input.startsWith('http') ? input : null,
 			});
+			if (data.slug) toast.success('Guide saved — share the link to reuse it');
 		} catch (err) {
 			setError(err instanceof Error ? err.message : 'An error occurred');
 		} finally {

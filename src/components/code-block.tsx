@@ -2,6 +2,7 @@
 
 import { Check, Copy } from 'lucide-react';
 import { useCallback, useState } from 'react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 
 interface CodeBlockProps {
@@ -17,6 +18,7 @@ export function CodeBlock({ code, language, title, onCopy }: CodeBlockProps) {
 	const handleCopy = useCallback(async () => {
 		await navigator.clipboard.writeText(code);
 		setCopied(true);
+		toast.success('Code copied');
 		setTimeout(() => setCopied(false), 2000);
 		onCopy?.();
 	}, [code, onCopy]);

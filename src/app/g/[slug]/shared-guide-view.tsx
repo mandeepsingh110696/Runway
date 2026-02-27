@@ -3,6 +3,7 @@
 import { Eye, FileCode, Key, Server, Share2, Terminal, Zap } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import { CodeBlock } from '@/components/code-block';
 import { EndpointSelector } from '@/components/endpoint-selector';
 import { TryItPanel } from '@/components/try-it-panel';
@@ -53,9 +54,11 @@ export function SharedGuideView({ spec, initialEndpoint, slug, viewCount }: Shar
 		try {
 			await navigator.clipboard.writeText(shareUrl);
 			setCopied(true);
+			toast.success('Link copied to clipboard');
 			setTimeout(() => setCopied(false), 2000);
 		} catch (err) {
 			console.error('Failed to copy:', err);
+			toast.error('Failed to copy link');
 		}
 	}, [shareUrl]);
 

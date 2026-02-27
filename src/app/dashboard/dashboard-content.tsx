@@ -1,6 +1,7 @@
 'use client';
 
 import type { User } from '@supabase/supabase-js';
+import { toast } from 'sonner';
 import {
 	Calendar,
 	Copy,
@@ -54,6 +55,7 @@ export function DashboardContent({ user, guides: initialGuides }: DashboardConte
 		const url = `${window.location.origin}/g/${slug}`;
 		await navigator.clipboard.writeText(url);
 		setCopiedSlug(slug);
+		toast.success('Link copied to clipboard');
 		setTimeout(() => setCopiedSlug(null), 2000);
 	}, []);
 

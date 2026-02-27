@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
+import { Toaster } from 'sonner';
 import { AuthProvider } from '@/components/auth';
 import { SiteHeader } from '@/components/site-header';
 import './globals.css';
@@ -40,6 +41,7 @@ export default function RootLayout({
 				<AuthProvider>
 					<SiteHeader />
 					{children}
+					<Toaster theme="dark" position="bottom-right" richColors />
 				</AuthProvider>
 			</body>
 		</html>
