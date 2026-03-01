@@ -22,17 +22,29 @@ export default function AppPage() {
 		setIsLoading(true);
 		setError(null);
 
+		const controller = new AbortController();
+		const timeoutId = setTimeout(() => controller.abort(), 30_000); // 30s max wait
+
 		try {
 			const response = await fetch('/api/parse', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ input }),
+				signal: controller.signal,
 			});
+
+			clearTimeout(timeoutId);
 
 			const data = await response.json();
 
 			if (!response.ok) {
-				throw new Error(data.error || 'Failed to parse spec');
+				const msg = typeof data?.error === 'string' ? data.error : 'Something went wrong';
+				if (response.status === 429) {
+					setError('Too many requests. Please wait a minute and try again.');
+					return;
+				}
+				setError(msg);
+				return;
 			}
 
 			setResult({
@@ -41,7 +53,13 @@ export default function AppPage() {
 			});
 			if (data.slug) toast.success('Guide saved — share the link to reuse it');
 		} catch (err) {
-			setError(err instanceof Error ? err.message : 'An error occurred');
+			if (err instanceof Error && err.name === 'AbortError') {
+				setError("Request took too long. Try a different URL or paste the OpenAPI JSON.");
+			} else {
+				setError(
+					err instanceof Error ? err.message : "Couldn't load spec. Check the URL or try again.",
+				);
+			}
 		} finally {
 			setIsLoading(false);
 		}

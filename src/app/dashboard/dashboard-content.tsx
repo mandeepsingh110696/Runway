@@ -133,19 +133,24 @@ export function DashboardContent({ user, guides: initialGuides }: DashboardConte
 				<h2 className="text-xl font-semibold">Your Guides</h2>
 
 				{guides.length === 0 ? (
-					<Card className="border-dashed">
-						<CardContent className="py-12 text-center">
-							<FileCode className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-							<h3 className="text-lg font-medium mb-2">No guides yet</h3>
-							<p className="text-muted-foreground mb-4">
-								Create your first Quick Start guide to see it here.
+					<Card className="border-dashed border-2">
+						<CardContent className="py-14 text-center">
+							<div className="mx-auto mb-4 w-14 h-14 rounded-xl bg-primary-muted/50 flex items-center justify-center">
+								<FileCode className="h-7 w-7 text-primary" />
+							</div>
+							<h3 className="text-lg font-semibold mb-1">No guides yet</h3>
+							<p className="text-muted-foreground mb-6 max-w-sm mx-auto">
+								Create your first Quick Start guide and it will show up here. Save and share links to reuse them anytime.
 							</p>
 							<Link href="/app">
 								<Button className="gap-2 bg-primary hover:bg-primary/90 shadow-md shadow-primary/20">
 									<Plus className="h-4 w-4" />
-									Create Guide
+									Create your first guide
 								</Button>
 							</Link>
+							<p className="mt-4 text-sm text-muted-foreground">
+								<a href="/app" className="hover:text-foreground">Try a sample API</a> to get started.
+							</p>
 						</CardContent>
 					</Card>
 				) : (

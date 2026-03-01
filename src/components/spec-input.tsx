@@ -1,12 +1,32 @@
 'use client';
 
-import { FileJson, Link, Loader2, Zap } from 'lucide-react';
+import { AlertCircle, FileJson, Link, Loader2, Zap } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+
+function isValidUrl(s: string): boolean {
+	try {
+		const u = new URL(s);
+		return u.protocol === 'http:' || u.protocol === 'https:';
+	} catch {
+		return false;
+	}
+}
+
+function isValidJson(s: string): boolean {
+	s = s.trim();
+	if (!s) return false;
+	try {
+		JSON.parse(s);
+		return true;
+	} catch {
+		return false;
+	}
+}
 
 interface SpecInputProps {
 	onSubmit: (input: string) => void;
@@ -32,12 +52,21 @@ export function SpecInput({ onSubmit, isLoading, error }: SpecInputProps) {
 	const [url, setUrl] = useState('');
 	const [json, setJson] = useState('');
 	const [activeTab, setActiveTab] = useState('url');
+	const [validationError, setValidationError] = useState<string | null>(null);
 
 	const handleSubmit = useCallback(() => {
+		setValidationError(null);
 		const input = activeTab === 'url' ? url.trim() : json.trim();
-		if (input) {
-			onSubmit(input);
+		if (!input) return;
+		if (activeTab === 'url' && !isValidUrl(input)) {
+			setValidationError('Please enter a valid URL (e.g. https://api.example.com/openapi.json)');
+			return;
 		}
+		if (activeTab === 'json' && !isValidJson(input)) {
+			setValidationError('Please enter valid OpenAPI JSON.');
+			return;
+		}
+		onSubmit(input);
 	}, [activeTab, url, json, onSubmit]);
 
 	const handleSampleClick = useCallback((sampleUrl: string) => {
@@ -66,7 +95,7 @@ export function SpecInput({ onSubmit, isLoading, error }: SpecInputProps) {
 				</CardDescription>
 			</CardHeader>
 			<CardContent className="space-y-6">
-				<Tabs value={activeTab} onValueChange={setActiveTab}>
+				<Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setValidationError(null); }}>
 					<TabsList className="grid w-full grid-cols-2">
 						<TabsTrigger value="url" className="flex items-center gap-2">
 							<Link className="h-4 w-4" />
@@ -84,7 +113,7 @@ export function SpecInput({ onSubmit, isLoading, error }: SpecInputProps) {
 								type="url"
 								placeholder="https://api.example.com/openapi.json"
 								value={url}
-								onChange={(e) => setUrl(e.target.value)}
+								onChange={(e) => { setUrl(e.target.value); setValidationError(null); }}
 								onKeyDown={handleKeyDown}
 								disabled={isLoading}
 								className="text-base"
@@ -113,7 +142,7 @@ export function SpecInput({ onSubmit, isLoading, error }: SpecInputProps) {
 						<Textarea
 							placeholder='{"openapi": "3.0.0", ...}'
 							value={json}
-							onChange={(e) => setJson(e.target.value)}
+							onChange={(e) => { setJson(e.target.value); setValidationError(null); }}
 							onKeyDown={handleKeyDown}
 							disabled={isLoading}
 							className="min-h-[200px] font-mono text-sm"
@@ -122,12 +151,28 @@ export function SpecInput({ onSubmit, isLoading, error }: SpecInputProps) {
 				</Tabs>
 
 				{error && (
-					<div className="p-3 rounded-md bg-destructive/10 text-destructive text-sm">{error}</div>
+					<div className="flex gap-3 p-3 rounded-lg border border-destructive/30 bg-destructive/10 text-destructive text-sm">
+						<AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+						<div>
+							<p className="font-medium">Couldn’t load spec</p>
+							<p className="text-destructive/90 mt-0.5">{error}</p>
+							<p className="text-muted-foreground mt-1.5 text-xs">
+								Check the URL or try pasting the OpenAPI JSON in the Paste JSON tab.
+							</p>
+						</div>
+					</div>
+				)}
+
+				{validationError && (
+					<div className="flex gap-3 p-3 rounded-lg border border-destructive/30 bg-destructive/10 text-destructive text-sm">
+						<AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+						<p>{validationError}</p>
+					</div>
 				)}
 
 				<Button
 					onClick={handleSubmit}
-					disabled={isLoading || (!url && !json)}
+					disabled={isLoading || (!url.trim() && !json.trim())}
 					className="w-full bg-primary hover:bg-primary/90 shadow-md shadow-primary/20"
 					size="lg"
 				>

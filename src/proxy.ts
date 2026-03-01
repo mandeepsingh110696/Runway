@@ -1,7 +1,13 @@
 import { createServerClient } from '@supabase/ssr';
 import { type NextRequest, NextResponse } from 'next/server';
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
+	// Skip Supabase for health check so it never hangs (e.g. when env is missing)
+	const pathname = request.nextUrl.pathname ?? '';
+	if (pathname === '/api/health' || pathname.endsWith('api/health')) {
+		return NextResponse.next();
+	}
+
 	let supabaseResponse = NextResponse.next({
 		request,
 	});
@@ -48,5 +54,6 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-	matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
+	// Only run Supabase auth for page routes that need it; never run for /api/* (so /api/health never hangs)
+	matcher: ['/', '/dashboard/:path*', '/login', '/app', '/app/:path*', '/g/:path*', '/auth/:path*'],
 };

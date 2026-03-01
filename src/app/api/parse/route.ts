@@ -1,10 +1,23 @@
 import { NextResponse } from 'next/server';
 import { pickBestEndpoint } from '@/lib/openapi';
 import { parseOpenAPISpec } from '@/lib/openapi/parser';
+import { checkRateLimit, getClientIdentifier } from '@/lib/rate-limit';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { extractDomain, generateSlug } from '@/lib/utils/slug';
 
 export async function POST(request: Request) {
+	const clientId = getClientIdentifier(request);
+	const { allowed, retryAfter } = checkRateLimit(clientId);
+	if (!allowed) {
+		return NextResponse.json(
+			{ error: 'Too many requests. Please try again in a minute.' },
+			{
+				status: 429,
+				headers: retryAfter ? { 'Retry-After': String(retryAfter) } : undefined,
+			},
+		);
+	}
+
 	try {
 		const { input, save = true } = await request.json();
 
@@ -68,7 +81,14 @@ export async function POST(request: Request) {
 	} catch (error) {
 		console.error('Parse error:', error);
 
-		const message = error instanceof Error ? error.message : 'Failed to parse OpenAPI spec';
+		const raw = error instanceof Error ? error.message : 'Failed to parse OpenAPI spec';
+		const isFetchError =
+			/fetch failed|Error downloading|ENOTFOUND|getaddrinfo|Failed to fetch|ECONNREFUSED/i.test(
+				raw,
+			);
+		const message = isFetchError
+			? "That URL couldn't be loaded. Check it or paste the OpenAPI JSON in the Paste JSON tab."
+			: raw;
 
 		return NextResponse.json({ error: message }, { status: 400 });
 	}
