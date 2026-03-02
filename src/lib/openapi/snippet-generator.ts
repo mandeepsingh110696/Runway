@@ -8,7 +8,13 @@ interface SnippetOptions {
 }
 
 export function generateSnippets(options: SnippetOptions): GeneratedSnippet[] {
-	return [generateCurl(options), generateFetch(options), generatePython(options)];
+	return [
+		generateCurl(options),
+		generateFetch(options),
+		generatePython(options),
+		generateNode(options),
+		generateGo(options),
+	];
 }
 
 export function generateSnippet(format: SnippetFormat, options: SnippetOptions): GeneratedSnippet {
@@ -19,7 +25,16 @@ export function generateSnippet(format: SnippetFormat, options: SnippetOptions):
 			return generateFetch(options);
 		case 'python':
 			return generatePython(options);
+		case 'node':
+			return generateNode(options);
+		case 'go':
+			return generateGo(options);
 	}
+}
+
+/** Get example request body for an endpoint (for Try it panel or snippets). */
+export function getExampleBodyForEndpoint(endpoint: ParsedEndpoint): Record<string, unknown> | null {
+	return getExampleBody(endpoint);
 }
 
 function generateCurl(options: SnippetOptions): GeneratedSnippet {
@@ -171,6 +186,104 @@ function generatePython(options: SnippetOptions): GeneratedSnippet {
 		format: 'python',
 		code: lines.join('\n'),
 		language: 'python',
+	};
+}
+
+function generateNode(options: SnippetOptions): GeneratedSnippet {
+	const { endpoint, baseUrl, auth } = options;
+	const url = buildUrl(baseUrl, endpoint);
+
+	const lines: string[] = ['const axios = require(\'axios\');', ''];
+
+	const headers: Record<string, string> = {};
+	if (auth?.headerName && auth.headerValue) {
+		const envVar = auth.envVarName;
+		if (auth.headerValue.includes('Bearer')) {
+			headers[auth.headerName] = `Bearer \${process.env.${envVar}}`;
+		} else {
+			headers[auth.headerName] = `\${process.env.${envVar}}`;
+		}
+	}
+	if (['POST', 'PUT', 'PATCH'].includes(endpoint.method)) {
+		headers['Content-Type'] = 'application/json';
+	}
+
+	const method = endpoint.method.toLowerCase();
+	const exampleBody = getExampleBody(endpoint);
+
+	if (exampleBody && ['POST', 'PUT', 'PATCH'].includes(endpoint.method)) {
+		lines.push(`const data = ${JSON.stringify(exampleBody, null, 2)};`);
+		lines.push('');
+	}
+	lines.push(`const response = await axios.${method}('${url}', {`);
+	if (Object.keys(headers).length > 0) {
+		lines.push('  headers: {');
+		for (const [k, v] of Object.entries(headers)) {
+			lines.push(`    '${k}': \`${v}\`,`);
+		}
+		lines.push('  },');
+	}
+	if (exampleBody && ['POST', 'PUT', 'PATCH'].includes(endpoint.method)) {
+		lines.push('  data,');
+	}
+	lines.push('});');
+	lines.push('');
+	lines.push('console.log(response.data);');
+
+	return {
+		format: 'node',
+		code: lines.join('\n'),
+		language: 'javascript',
+	};
+}
+
+function generateGo(options: SnippetOptions): GeneratedSnippet {
+	const { endpoint, baseUrl, auth } = options;
+	const url = buildUrl(baseUrl, endpoint);
+
+	const lines: string[] = ['package main', '', 'import (', '	"bytes"', '	"encoding/json"', '	"fmt"', '	"io"', '	"net/http"', '	"os"', ')', ''];
+
+	const method = endpoint.method;
+	const exampleBody = getExampleBody(endpoint);
+	const hasBody = exampleBody && ['POST', 'PUT', 'PATCH'].includes(endpoint.method);
+
+	lines.push('func main() {');
+	lines.push(`	url := "${url}"`);
+	const bodyArg = hasBody ? 'bytes.NewReader(body)' : 'nil';
+	if (hasBody) {
+		lines.push(`	body, _ := json.Marshal(${JSON.stringify(exampleBody)})`);
+	}
+	if (auth?.headerName && auth.headerValue) {
+		const envVar = auth.envVarName;
+		if (auth.headerValue.includes('Bearer')) {
+			lines.push(`	token := os.Getenv("${envVar}")`);
+			lines.push(`	req, _ := http.NewRequest("${method}", url, ${bodyArg})`);
+			lines.push(`	req.Header.Set("${auth.headerName}", "Bearer "+token)`);
+		} else {
+			lines.push(`	key := os.Getenv("${envVar}")`);
+			lines.push(`	req, _ := http.NewRequest("${method}", url, ${bodyArg})`);
+			lines.push(`	req.Header.Set("${auth.headerName}", key)`);
+		}
+	} else {
+		lines.push(`	req, _ := http.NewRequest("${method}", url, ${bodyArg})`);
+	}
+	if (hasBody) {
+		lines.push('	req.Header.Set("Content-Type", "application/json")');
+	}
+	lines.push('');
+	lines.push('	client := &http.Client{}');
+	lines.push('	resp, err := client.Do(req)');
+	lines.push('	if err != nil { panic(err) }');
+	lines.push('	defer resp.Body.Close()');
+	lines.push('');
+	lines.push('	b, _ := io.ReadAll(resp.Body)');
+	lines.push('	fmt.Println(string(b))');
+	lines.push('}');
+
+	return {
+		format: 'go',
+		code: lines.join('\n'),
+		language: 'go',
 	};
 }
 

@@ -170,7 +170,7 @@ export function SharedGuideView({ spec, initialEndpoint, slug, viewCount }: Shar
 					</div>
 
 					<Tabs value={activeFormat} onValueChange={(v) => setActiveFormat(v as SnippetFormat)}>
-						<TabsList>
+						<TabsList className="flex flex-wrap h-auto gap-1">
 							<TabsTrigger value="curl" className="gap-1">
 								<Terminal className="h-3 w-3" />
 								curl
@@ -179,9 +179,17 @@ export function SharedGuideView({ spec, initialEndpoint, slug, viewCount }: Shar
 								<FileCode className="h-3 w-3" />
 								JavaScript
 							</TabsTrigger>
+							<TabsTrigger value="node" className="gap-1">
+								<FileCode className="h-3 w-3" />
+								Node
+							</TabsTrigger>
 							<TabsTrigger value="python" className="gap-1">
 								<FileCode className="h-3 w-3" />
 								Python
+							</TabsTrigger>
+							<TabsTrigger value="go" className="gap-1">
+								<FileCode className="h-3 w-3" />
+								Go
 							</TabsTrigger>
 						</TabsList>
 

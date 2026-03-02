@@ -98,7 +98,7 @@ export interface QuickStartData {
 	authSchemeName: string | null;
 }
 
-export type SnippetFormat = 'curl' | 'fetch' | 'python';
+export type SnippetFormat = 'curl' | 'fetch' | 'python' | 'node' | 'go';
 
 export interface GeneratedSnippet {
 	format: SnippetFormat;

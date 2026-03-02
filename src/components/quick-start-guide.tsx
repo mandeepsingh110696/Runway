@@ -163,7 +163,7 @@ export function QuickStartGuide({
 					</div>
 
 					<Tabs value={activeFormat} onValueChange={(v) => setActiveFormat(v as SnippetFormat)}>
-						<TabsList>
+						<TabsList className="flex flex-wrap h-auto gap-1">
 							<TabsTrigger value="curl" className="gap-1">
 								<Terminal className="h-3 w-3" />
 								curl
@@ -172,9 +172,17 @@ export function QuickStartGuide({
 								<FileCode className="h-3 w-3" />
 								JavaScript
 							</TabsTrigger>
+							<TabsTrigger value="node" className="gap-1">
+								<FileCode className="h-3 w-3" />
+								Node
+							</TabsTrigger>
 							<TabsTrigger value="python" className="gap-1">
 								<FileCode className="h-3 w-3" />
 								Python
+							</TabsTrigger>
+							<TabsTrigger value="go" className="gap-1">
+								<FileCode className="h-3 w-3" />
+								Go
 							</TabsTrigger>
 						</TabsList>
 
@@ -186,7 +194,7 @@ export function QuickStartGuide({
 									onCopy={() =>
 										trackSnippetCopy(
 											undefined,
-											snippet.format as 'curl' | 'fetch' | 'python',
+											snippet.format as 'curl' | 'fetch' | 'python' | 'node' | 'go',
 											specUrl,
 										)
 									}

@@ -36,7 +36,7 @@ export async function trackEvent({
 
 export async function trackSnippetCopy(
 	guideId: string | undefined,
-	format: 'curl' | 'fetch' | 'python',
+	format: 'curl' | 'fetch' | 'python' | 'node' | 'go',
 	specUrl?: string | null,
 ): Promise<void> {
 	await trackEvent({

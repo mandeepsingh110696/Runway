@@ -1,13 +1,14 @@
 'use client';
 
 import { AlertCircle, CheckCircle, Loader2, Send } from 'lucide-react';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { CodeBlock } from '@/components/code-block';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { AuthInfo } from '@/lib/openapi/auth-detector';
+import { getExampleBodyForEndpoint } from '@/lib/openapi/snippet-generator';
 import type { ParsedEndpoint } from '@/types/openapi';
 
 interface TryItPanelProps {
@@ -31,6 +32,14 @@ export function TryItPanel({ endpoint, baseUrl, auth, onRequestSent }: TryItPane
 	const [response, setResponse] = useState<ApiResponse | null>(null);
 	const [error, setError] = useState<string | null>(null);
 
+	const requestBody = useMemo(
+		() =>
+			['POST', 'PUT', 'PATCH'].includes(endpoint.method)
+				? getExampleBodyForEndpoint(endpoint)
+				: null,
+		[endpoint],
+	);
+
 	const handleSendRequest = useCallback(async () => {
 		setIsLoading(true);
 		setError(null);
@@ -39,15 +48,22 @@ export function TryItPanel({ endpoint, baseUrl, auth, onRequestSent }: TryItPane
 		const startTime = performance.now();
 
 		try {
-			// Build the request URL
+			// Build the request URL (path + required query params)
 			let url = baseUrl.replace(/\/$/, '') + endpoint.path;
 
-			// Replace path parameters with placeholders
 			for (const param of endpoint.parameters) {
 				if (param.in === 'path') {
 					const placeholder = param.example || `example-${param.name}`;
 					url = url.replace(`{${param.name}}`, String(placeholder));
 				}
+			}
+
+			const queryParams = endpoint.parameters.filter((p) => p.in === 'query' && p.required);
+			if (queryParams.length > 0) {
+				const queryString = queryParams
+					.map((p) => `${p.name}=${encodeURIComponent(String(p.example ?? p.name))}`)
+					.join('&');
+				url += `?${queryString}`;
 			}
 
 			// Prepare headers
@@ -65,6 +81,10 @@ export function TryItPanel({ endpoint, baseUrl, auth, onRequestSent }: TryItPane
 				}
 			}
 
+			// Request body for POST/PUT/PATCH
+			const body =
+				requestBody && ['POST', 'PUT', 'PATCH'].includes(endpoint.method) ? requestBody : undefined;
+
 			// Make the request via our proxy
 			const proxyResponse = await fetch('/api/proxy', {
 				method: 'POST',
@@ -73,6 +93,7 @@ export function TryItPanel({ endpoint, baseUrl, auth, onRequestSent }: TryItPane
 					url,
 					method: endpoint.method,
 					headers,
+					...(body !== undefined && { body }),
 				}),
 			});
 
@@ -96,7 +117,7 @@ export function TryItPanel({ endpoint, baseUrl, auth, onRequestSent }: TryItPane
 		} finally {
 			setIsLoading(false);
 		}
-	}, [baseUrl, endpoint, auth, apiKey, onRequestSent]);
+	}, [baseUrl, endpoint, auth, apiKey, requestBody, onRequestSent]);
 
 	return (
 		<div className="space-y-4">
