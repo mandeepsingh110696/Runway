@@ -60,6 +60,14 @@ interface ResponseObject {
 	content?: Record<string, { schema?: Record<string, unknown>; example?: unknown }>;
 }
 
+const FETCH_OPTIONS: RequestInit = {
+	headers: {
+		'User-Agent': 'Runway/1.0 (OpenAPI Parser; https://runway.dev)',
+		Accept: 'application/json',
+	},
+	redirect: 'follow',
+};
+
 export async function parseOpenAPISpec(input: string): Promise<ParsedSpec> {
 	let spec: OpenAPIDocument;
 	let specUrl: string | undefined;
@@ -67,8 +75,19 @@ export async function parseOpenAPISpec(input: string): Promise<ParsedSpec> {
 	// Check if input is URL or JSON
 	if (input.startsWith('http://') || input.startsWith('https://')) {
 		specUrl = input;
-		// Use dereference to get the full document with resolved $refs
-		spec = (await OpenAPIParser.dereference(input)) as unknown as OpenAPIDocument;
+		// Fetch with User-Agent so GitHub raw and other hosts accept the request
+		const res = await fetch(input, FETCH_OPTIONS);
+		if (!res.ok) {
+			throw new Error(`Error downloading ${input}: ${res.status} ${res.statusText}`);
+		}
+		const text = await res.text();
+		let parsed: unknown;
+		try {
+			parsed = JSON.parse(text) as unknown;
+		} catch {
+			throw new Error(`Invalid JSON from ${input}`);
+		}
+		spec = (await OpenAPIParser.dereference(parsed)) as unknown as OpenAPIDocument;
 	} else {
 		// Try to parse as JSON
 		const parsed = JSON.parse(input);

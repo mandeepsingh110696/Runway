@@ -5,7 +5,6 @@ import {
 	Check,
 	Clock,
 	Code2,
-	ExternalLink,
 	Globe,
 	Rocket,
 	Share2,
@@ -361,14 +360,6 @@ export default function LandingPage() {
 							<Link href="/app" className="hover:text-primary transition-colors">
 								App
 							</Link>
-							<a
-								href="https://github.com"
-								target="_blank"
-								rel="noopener noreferrer"
-								className="hover:text-primary transition-colors flex items-center gap-1"
-							>
-								GitHub <ExternalLink className="h-3 w-3" />
-							</a>
 						</div>
 					</div>
 				</div>

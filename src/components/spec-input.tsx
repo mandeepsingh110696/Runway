@@ -34,17 +34,17 @@ interface SpecInputProps {
 	error: string | null;
 }
 
-// Sample APIs for quick testing
+// Sample APIs for quick testing (URLs must serve valid OpenAPI JSON)
 const SAMPLE_APIS = [
-	{
-		name: 'JSONPlaceholder',
-		url: 'https://raw.githubusercontent.com/typicode/jsonplaceholder/master/public/openapi.json',
-		description: 'Free fake API for testing',
-	},
 	{
 		name: 'PetStore',
 		url: 'https://petstore3.swagger.io/api/v3/openapi.json',
 		description: 'Classic Swagger example',
+	},
+	{
+		name: 'HTTPBin',
+		url: 'https://httpbin.org/spec.json',
+		description: 'HTTP request testing',
 	},
 ];
 

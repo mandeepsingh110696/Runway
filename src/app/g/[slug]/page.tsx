@@ -18,6 +18,8 @@ interface GuideRow {
 	view_count: number;
 }
 
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://runway.dev';
+
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
 	const { slug } = await params;
 	const supabase = await createAdminClient();
@@ -32,13 +34,26 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 		return { title: 'Guide Not Found - Runway' };
 	}
 
+	const title = `${guide.api_name} Quick Start - Runway`;
+	const description = `Get started with the ${guide.api_name} API in seconds. Copy-paste code for curl, JavaScript, Node, Python, and Go.`;
+	const canonicalPath = `/g/${slug}`;
+	const fullUrl = `${APP_URL.replace(/\/$/, '')}${canonicalPath}`;
+
 	return {
-		title: `${guide.api_name} Quick Start - Runway`,
-		description: `Get started with the ${guide.api_name} API in seconds. Copy-paste code snippets for curl, JavaScript, and Python.`,
+		title,
+		description,
+		alternates: { canonical: canonicalPath },
 		openGraph: {
-			title: `${guide.api_name} Quick Start - Runway`,
-			description: `Get started with the ${guide.api_name} API in seconds.`,
+			title,
+			description,
+			url: fullUrl,
 			type: 'article',
+			siteName: 'Runway',
+		},
+		twitter: {
+			card: 'summary_large_image',
+			title,
+			description,
 		},
 	};
 }

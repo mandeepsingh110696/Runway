@@ -15,7 +15,10 @@ const geistMono = Geist_Mono({
 	subsets: ['latin'],
 });
 
+const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://runway.dev';
+
 export const metadata: Metadata = {
+	metadataBase: new URL(appUrl.replace(/\/$/, '')),
 	title: 'Runway - Time to First API Call',
 	description:
 		'From OpenAPI spec to your first API call in seconds. Generate quick start guides with copy-paste code snippets.',

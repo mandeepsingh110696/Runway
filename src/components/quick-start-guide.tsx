@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft, Download, FileCode, Key, Server, Terminal, Zap } from 'lucide-react';
+import { ArrowLeft, Copy, Download, FileCode, Key, Server, Terminal, Zap } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { CodeBlock } from '@/components/code-block';
 import { EndpointSelector } from '@/components/endpoint-selector';
@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { toast } from 'sonner';
 import { trackSnippetCopy, trackTryItUsed } from '@/lib/analytics';
 import { detectAuth, generateSnippets, getAlternativeEndpoints } from '@/lib/openapi';
 import type { ParsedEndpoint, ParsedSpec, SnippetFormat } from '@/types/openapi';
@@ -64,6 +65,12 @@ export function QuickStartGuide({
 		URL.revokeObjectURL(url);
 	}, [spec, selectedEndpoint, auth, snippets]);
 
+	const handleCopyAllSnippets = useCallback(async () => {
+		const markdown = generateMarkdown(spec, selectedEndpoint, auth, snippets);
+		await navigator.clipboard.writeText(markdown);
+		toast.success('All snippets copied to clipboard');
+	}, [spec, selectedEndpoint, auth, snippets]);
+
 	return (
 		<div className="w-full max-w-4xl mx-auto space-y-6">
 			{/* Header */}
@@ -74,6 +81,10 @@ export function QuickStartGuide({
 				</Button>
 				<div className="flex items-center gap-2">
 					{slug && <ShareButton slug={slug} specUrl={specUrl} />}
+					<Button variant="outline" onClick={handleCopyAllSnippets} className="gap-2">
+						<Copy className="h-4 w-4" />
+						Copy all
+					</Button>
 					<Button variant="outline" onClick={handleExportMarkdown} className="gap-2">
 						<Download className="h-4 w-4" />
 						Export Markdown
