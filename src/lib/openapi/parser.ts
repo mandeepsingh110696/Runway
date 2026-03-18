@@ -87,7 +87,9 @@ export async function parseOpenAPISpec(input: string): Promise<ParsedSpec> {
 		} catch {
 			throw new Error(`Invalid JSON from ${input}`);
 		}
-		spec = (await OpenAPIParser.dereference(parsed)) as unknown as OpenAPIDocument;
+		spec = (await OpenAPIParser.dereference(
+			parsed as Parameters<typeof OpenAPIParser.dereference>[0],
+		)) as unknown as OpenAPIDocument;
 	} else {
 		// Try to parse as JSON
 		const parsed = JSON.parse(input);

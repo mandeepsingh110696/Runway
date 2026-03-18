@@ -49,7 +49,7 @@ Parsing runs server-side. You can sign in (magic link or GitHub) to save guides 
 
 ## 📊 Dashboard
 
-Sign in to see your saved guides, copy share links, and track views.
+Sign in to see your saved guides, copy share links, and track views. **Star** guides for quick access and **collections** to group them (e.g. by product or team).
 
 ![Dashboard](public/screenshots/dashboard.png)
 

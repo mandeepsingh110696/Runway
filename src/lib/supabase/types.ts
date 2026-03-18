@@ -3,6 +3,27 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 export interface Database {
 	public: {
 		Tables: {
+			collections: {
+				Row: {
+					id: string;
+					user_id: string;
+					name: string;
+					created_at: string;
+				};
+				Insert: {
+					id?: string;
+					user_id: string;
+					name: string;
+					created_at?: string;
+				};
+				Update: {
+					id?: string;
+					user_id?: string;
+					name?: string;
+					created_at?: string;
+				};
+				Relationships: [];
+			};
 			guides: {
 				Row: {
 					id: string;
@@ -13,6 +34,8 @@ export interface Database {
 					created_at: string;
 					user_id: string | null;
 					view_count: number;
+					is_favorite: boolean;
+					collection_id: string | null;
 				};
 				Insert: {
 					id?: string;
@@ -23,6 +46,8 @@ export interface Database {
 					created_at?: string;
 					user_id?: string | null;
 					view_count?: number;
+					is_favorite?: boolean;
+					collection_id?: string | null;
 				};
 				Update: {
 					id?: string;
@@ -33,7 +58,10 @@ export interface Database {
 					created_at?: string;
 					user_id?: string | null;
 					view_count?: number;
+					is_favorite?: boolean;
+					collection_id?: string | null;
 				};
+				Relationships: [];
 			};
 			events: {
 				Row: {
@@ -60,6 +88,7 @@ export interface Database {
 					created_at?: string;
 					metadata?: Json;
 				};
+				Relationships: [];
 			};
 		};
 		Views: {
@@ -70,6 +99,7 @@ export interface Database {
 					total_events: number | null;
 					last_activity: string | null;
 				};
+				Relationships: [];
 			};
 		};
 		Functions: {
@@ -82,6 +112,7 @@ export interface Database {
 }
 
 export type Guide = Database['public']['Tables']['guides']['Row'];
+export type Collection = Database['public']['Tables']['collections']['Row'];
 export type GuideInsert = Database['public']['Tables']['guides']['Insert'];
 export type Event = Database['public']['Tables']['events']['Row'];
 export type EventInsert = Database['public']['Tables']['events']['Insert'];
