@@ -10,6 +10,7 @@ import {
 	FileCode,
 	FolderPlus,
 	LogOut,
+	Pencil,
 	Plus,
 	Star,
 	Trash2,
@@ -57,6 +58,9 @@ export function DashboardContent({
 	const [newCollectionName, setNewCollectionName] = useState('');
 	const [creatingCollection, setCreatingCollection] = useState(false);
 	const [deletingCollectionId, setDeletingCollectionId] = useState<string | null>(null);
+	const [renamingCollection, setRenamingCollection] = useState<{ id: string; name: string } | null>(null);
+	const [renameCollectionName, setRenameCollectionName] = useState('');
+	const [savingRename, setSavingRename] = useState(false);
 
 	const filteredGuides = useMemo(() => {
 		if (filter === 'all') return guides;
@@ -76,15 +80,20 @@ export function DashboardContent({
 		router.refresh();
 	}, [router]);
 
-	const handleDelete = useCallback(async (id: string) => {
-		setDeletingId(id);
-		const supabase = createClient();
-		const { error } = await supabase.from('guides').delete().eq('id', id);
-
-		if (!error) {
-			setGuides((prev) => prev.filter((g) => g.id !== id));
+	const handleDelete = useCallback(async (guide: Guide) => {
+		if (!window.confirm(`Delete “${guide.api_name}”? This guide will be removed from your dashboard.`)) {
+			return;
 		}
+		setDeletingId(guide.id);
+		const supabase = createClient();
+		const { error } = await supabase.from('guides').delete().eq('id', guide.id);
 		setDeletingId(null);
+		if (error) {
+			toast.error(error.message || 'Could not delete guide');
+			return;
+		}
+		setGuides((prev) => prev.filter((g) => g.id !== guide.id));
+		toast.success('Guide deleted');
 	}, []);
 
 	const handleCopyLink = useCallback(async (slug: string) => {
@@ -159,7 +168,7 @@ export function DashboardContent({
 		async (c: { id: string; name: string }) => {
 			if (
 				!window.confirm(
-					`Delete “${c.name}”? Guides in this collection will move to “No collection”.`,
+					`Delete '${c.name}'? Guides in this collection will be moved to 'No collection'.`,
 				)
 			) {
 				return;
@@ -185,6 +194,33 @@ export function DashboardContent({
 		},
 		[filter],
 	);
+
+	const handleRenameCollection = useCallback(async () => {
+		if (!renamingCollection || !renameCollectionName.trim()) return;
+		const name = renameCollectionName.trim();
+		if (name === renamingCollection.name) {
+			setRenamingCollection(null);
+			setRenameCollectionName('');
+			return;
+		}
+		setSavingRename(true);
+		const supabase = createClient();
+		const { error } = await supabase
+			.from('collections')
+			.update({ name })
+			.eq('id', renamingCollection.id);
+		setSavingRename(false);
+		if (error) {
+			toast.error(error.message || 'Could not rename collection');
+			return;
+		}
+		setCollections((prev) =>
+			prev.map((c) => (c.id === renamingCollection.id ? { ...c, name } : c)).sort((a, b) => a.name.localeCompare(b.name)),
+		);
+		setRenamingCollection(null);
+		setRenameCollectionName('');
+		toast.success('Collection renamed');
+	}, [renamingCollection, renameCollectionName]);
 
 	const formatDate = (date: string) => {
 		return new Date(date).toLocaleDateString('en-US', {
@@ -299,6 +335,20 @@ export function DashboardContent({
 										onClick={() => setFilter(`collection:${c.id}`)}
 									>
 										{c.name} ({count})
+									</Button>
+									<Button
+										variant="ghost"
+										size="sm"
+										className="rounded-none border-0 border-l border-border px-2 h-auto min-w-9 text-muted-foreground hover:text-foreground"
+										disabled={savingRename}
+										aria-label={`Rename collection ${c.name}`}
+										onClick={(e) => {
+											e.stopPropagation();
+											setRenamingCollection({ id: c.id, name: c.name });
+											setRenameCollectionName(c.name);
+										}}
+									>
+										<Pencil className="h-3.5 w-3.5" />
 									</Button>
 									<Button
 										variant="ghost"
@@ -450,7 +500,7 @@ export function DashboardContent({
 										<Button
 											variant="ghost"
 											size="sm"
-											onClick={() => handleDelete(guide.id)}
+											onClick={() => handleDelete(guide)}
 											disabled={deletingId === guide.id}
 											className="text-destructive hover:text-destructive gap-1"
 										>
@@ -492,6 +542,52 @@ export function DashboardContent({
 									disabled={!newCollectionName.trim() || creatingCollection}
 								>
 									{creatingCollection ? 'Creating...' : 'Create'}
+								</Button>
+							</div>
+						</CardContent>
+					</Card>
+				</div>
+			)}
+
+			{renamingCollection && (
+				<div
+					className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60"
+					role="dialog"
+					aria-modal="true"
+					aria-labelledby="rename-collection-title"
+				>
+					<Card className="w-full max-w-md border-2 shadow-xl">
+						<CardHeader>
+							<CardTitle id="rename-collection-title">Rename collection</CardTitle>
+						</CardHeader>
+						<CardContent className="space-y-4">
+							<Input
+								placeholder="Collection name"
+								value={renameCollectionName}
+								onChange={(e) => setRenameCollectionName(e.target.value)}
+								onKeyDown={(e) => {
+									if (e.key === 'Enter') handleRenameCollection();
+									if (e.key === 'Escape') {
+										setRenamingCollection(null);
+										setRenameCollectionName('');
+									}
+								}}
+							/>
+							<div className="flex gap-2 justify-end">
+								<Button
+									variant="outline"
+									onClick={() => {
+										setRenamingCollection(null);
+										setRenameCollectionName('');
+									}}
+								>
+									Cancel
+								</Button>
+								<Button
+									onClick={handleRenameCollection}
+									disabled={!renameCollectionName.trim() || savingRename}
+								>
+									{savingRename ? 'Saving...' : 'Save'}
 								</Button>
 							</div>
 						</CardContent>
