@@ -12,13 +12,14 @@ import {
 	LogOut,
 	Pencil,
 	Plus,
+	Search,
 	Star,
 	Trash2,
 	Zap,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -61,6 +62,10 @@ export function DashboardContent({
 	const [renamingCollection, setRenamingCollection] = useState<{ id: string; name: string } | null>(null);
 	const [renameCollectionName, setRenameCollectionName] = useState('');
 	const [savingRename, setSavingRename] = useState(false);
+	const [guideSearch, setGuideSearch] = useState('');
+	const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+	const [bulkBusy, setBulkBusy] = useState(false);
+	const selectAllRef = useRef<HTMLInputElement>(null);
 
 	const filteredGuides = useMemo(() => {
 		if (filter === 'all') return guides;
@@ -72,6 +77,104 @@ export function DashboardContent({
 		}
 		return guides;
 	}, [guides, filter]);
+
+	const searchNorm = guideSearch.trim().toLowerCase();
+
+	const searchFilteredGuides = useMemo(() => {
+		if (!searchNorm) return filteredGuides;
+		return filteredGuides.filter((g) => {
+			const name = (g.api_name ?? '').toLowerCase();
+			const url = (g.spec_url ?? '').toLowerCase();
+			return name.includes(searchNorm) || url.includes(searchNorm);
+		});
+	}, [filteredGuides, searchNorm]);
+
+	/** Drop selections that are no longer visible (filter/search changed). */
+	useEffect(() => {
+		const visible = new Set(searchFilteredGuides.map((g) => g.id));
+		setSelectedIds((prev) => {
+			const next = new Set<string>();
+			for (const id of prev) {
+				if (visible.has(id)) next.add(id);
+			}
+			if (next.size === prev.size) {
+				for (const id of prev) {
+					if (!next.has(id)) return next;
+				}
+				return prev;
+			}
+			return next;
+		});
+	}, [searchFilteredGuides]);
+
+	const visibleIds = useMemo(() => searchFilteredGuides.map((g) => g.id), [searchFilteredGuides]);
+	const selectedVisibleCount = useMemo(
+		() => visibleIds.filter((id) => selectedIds.has(id)).length,
+		[visibleIds, selectedIds],
+	);
+	const allVisibleSelected =
+		visibleIds.length > 0 && selectedVisibleCount === visibleIds.length;
+
+	useEffect(() => {
+		const el = selectAllRef.current;
+		if (!el) return;
+		el.indeterminate = selectedVisibleCount > 0 && !allVisibleSelected;
+	}, [selectedVisibleCount, allVisibleSelected]);
+
+	const toggleGuideSelected = useCallback((id: string) => {
+		setSelectedIds((prev) => {
+			const next = new Set(prev);
+			if (next.has(id)) next.delete(id);
+			else next.add(id);
+			return next;
+		});
+	}, []);
+
+	const toggleSelectAllVisible = useCallback(() => {
+		setSelectedIds((prev) => {
+			const next = new Set(prev);
+			if (allVisibleSelected) {
+				for (const id of visibleIds) next.delete(id);
+			} else {
+				for (const id of visibleIds) next.add(id);
+			}
+			return next;
+		});
+	}, [allVisibleSelected, visibleIds]);
+
+	const clearSelection = useCallback(() => {
+		setSelectedIds(new Set());
+	}, []);
+
+	const handleBulkCollectionChange = useCallback(
+		async (collectionId: string | null) => {
+			const ids = [...selectedIds];
+			if (ids.length === 0) return;
+			setBulkBusy(true);
+			const supabase = createClient();
+			const { error } = await supabase
+				.from('guides')
+				.update({ collection_id: collectionId })
+				.in('id', ids);
+			setBulkBusy(false);
+			if (error) {
+				toast.error(error.message || 'Could not update guides');
+				return;
+			}
+			setGuides((prev) =>
+				prev.map((g) =>
+					ids.includes(g.id) ? ({ ...g, collection_id: collectionId } as Guide) : g,
+				),
+			);
+			setSelectedIds(new Set());
+			toast.success(
+				collectionId
+					? `Moved ${ids.length} guide${ids.length === 1 ? '' : 's'} to collection`
+					: `Removed ${ids.length} guide${ids.length === 1 ? '' : 's'} from collection`,
+			);
+		},
+		[selectedIds],
+	);
 
 	const handleLogout = useCallback(async () => {
 		const supabase = createClient();
@@ -93,6 +196,12 @@ export function DashboardContent({
 			return;
 		}
 		setGuides((prev) => prev.filter((g) => g.id !== guide.id));
+		setSelectedIds((prev) => {
+			if (!prev.has(guide.id)) return prev;
+			const next = new Set(prev);
+			next.delete(guide.id);
+			return next;
+		});
 		toast.success('Guide deleted');
 	}, []);
 
@@ -284,18 +393,35 @@ export function DashboardContent({
 
 			{guides.length > 0 && (
 				<div className="space-y-3">
-					<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-						<h2 className="text-xl font-semibold">Your Guides</h2>
-						<Button
-							variant="outline"
-							size="sm"
-							className="gap-2 shrink-0"
-							onClick={() => setCollectionDialogOpen(true)}
-						>
-							<FolderPlus className="h-4 w-4" />
-							New collection
-						</Button>
-					</div>
+					<div className="flex flex-col gap-3">
+						<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+							<h2 className="text-xl font-semibold shrink-0">Your Guides</h2>
+							<div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-end flex-1 min-w-0">
+								<div className="relative w-full sm:max-w-xs">
+									<Search
+										className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground pointer-events-none"
+										aria-hidden
+									/>
+									<Input
+										type="search"
+										placeholder="Search by name or spec URL…"
+										value={guideSearch}
+										onChange={(e) => setGuideSearch(e.target.value)}
+										className="pl-9"
+										aria-label="Search guides"
+									/>
+								</div>
+								<Button
+									variant="outline"
+									size="sm"
+									className="gap-2 shrink-0 w-full sm:w-auto"
+									onClick={() => setCollectionDialogOpen(true)}
+								>
+									<FolderPlus className="h-4 w-4" />
+									New collection
+								</Button>
+							</div>
+						</div>
 					<div className="flex flex-wrap gap-2">
 						<Button
 							variant={filter === 'all' ? 'default' : 'outline'}
@@ -367,6 +493,7 @@ export function DashboardContent({
 							);
 						})}
 					</div>
+					</div>
 				</div>
 			)}
 
@@ -401,9 +528,85 @@ export function DashboardContent({
 						No guides in this filter. Try another tab or create a new guide.
 					</CardContent>
 				</Card>
+			) : searchFilteredGuides.length === 0 ? (
+				<Card className="border-dashed">
+					<CardContent className="py-10 text-center text-muted-foreground">
+						No guides match your search. Try a different name or URL.
+					</CardContent>
+				</Card>
 			) : (
 				<div className="grid gap-4">
-					{filteredGuides.map((guide) => (
+					<div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2.5 text-sm">
+						<div className="flex items-center gap-2">
+							<input
+								ref={selectAllRef}
+								type="checkbox"
+								checked={allVisibleSelected}
+								onChange={toggleSelectAllVisible}
+								className="size-4 shrink-0 rounded border border-input accent-primary cursor-pointer"
+								aria-label="Select all visible guides"
+							/>
+							<span className="text-muted-foreground whitespace-nowrap">
+								{selectedIds.size > 0 ? (
+									<>
+										<span className="font-medium text-foreground">{selectedIds.size}</span>{' '}
+										selected
+									</>
+								) : (
+									'Select guides'
+								)}
+							</span>
+						</div>
+						<div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+							<Button
+								type="button"
+								variant="ghost"
+								size="sm"
+								className="h-8"
+								disabled={selectedIds.size === 0}
+								onClick={clearSelection}
+							>
+								Clear
+							</Button>
+							<div className="relative min-w-[10rem] sm:min-w-[12rem]">
+								<select
+									className="w-full appearance-none rounded-md border border-input bg-background py-1.5 pl-2 pr-8 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+									disabled={selectedIds.size === 0 || bulkBusy || collections.length === 0}
+									value=""
+									aria-label="Move selected guides to collection"
+									onChange={(e) => {
+										const v = e.target.value;
+										e.target.value = '';
+										if (v) handleBulkCollectionChange(v);
+									}}
+								>
+									<option value="" disabled>
+										Move to collection…
+									</option>
+									{collections.map((c) => (
+										<option key={c.id} value={c.id}>
+											{c.name}
+										</option>
+									))}
+								</select>
+								<ChevronDown
+									className="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+									aria-hidden
+								/>
+							</div>
+							<Button
+								type="button"
+								variant="outline"
+								size="sm"
+								className="h-8"
+								disabled={selectedIds.size === 0 || bulkBusy}
+								onClick={() => handleBulkCollectionChange(null)}
+							>
+								Remove from collection
+							</Button>
+						</div>
+					</div>
+					{searchFilteredGuides.map((guide) => (
 						<Card
 							key={guide.id}
 							className="hover:border-primary/30 hover:shadow-md transition-all duration-200 shadow-sm"
@@ -411,21 +614,30 @@ export function DashboardContent({
 							<CardContent className="py-4">
 								<div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
 									<div className="flex gap-3 min-w-0 flex-1">
-										<Button
-											variant="ghost"
-											size="icon"
-											className="h-9 w-9 shrink-0 mt-0.5"
-											onClick={() => handleToggleFavorite(guide)}
-											aria-label={guideIsFavorite(guide) ? 'Unstar' : 'Star'}
-										>
-											<Star
-												className={`h-4 w-4 ${
-													guideIsFavorite(guide)
-														? 'fill-amber-400 text-amber-400'
-														: 'text-muted-foreground'
-												}`}
+										<div className="flex items-start gap-1 shrink-0 pt-0.5">
+											<input
+												type="checkbox"
+												checked={selectedIds.has(guide.id)}
+												onChange={() => toggleGuideSelected(guide.id)}
+												className="size-4 mt-1.5 rounded border border-input accent-primary cursor-pointer"
+												aria-label={`Select ${guide.api_name}`}
 											/>
-										</Button>
+											<Button
+												variant="ghost"
+												size="icon"
+												className="h-9 w-9 shrink-0"
+												onClick={() => handleToggleFavorite(guide)}
+												aria-label={guideIsFavorite(guide) ? 'Unstar' : 'Star'}
+											>
+												<Star
+													className={`h-4 w-4 ${
+														guideIsFavorite(guide)
+															? 'fill-amber-400 text-amber-400'
+															: 'text-muted-foreground'
+													}`}
+												/>
+											</Button>
+										</div>
 										<div className="min-w-0 flex-1 space-y-2">
 											<div className="flex flex-wrap items-start gap-x-2 gap-y-1">
 												<h3 className="font-semibold text-base leading-snug break-words">
