@@ -25,10 +25,22 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { createClient } from '@/lib/supabase/client';
 import type { Collection, Guide } from '@/lib/supabase/types';
 
 type FilterKey = 'all' | 'starred' | 'uncollected' | `collection:${string}`;
+
+type GuideSortKey =
+	| 'starred_first'
+	| 'name_asc'
+	| 'name_desc'
+	| 'date_desc'
+	| 'date_asc'
+	| 'views_desc'
+	| 'views_asc';
+
+const NOTE_MAX_LEN = 500;
 
 function guideIsFavorite(g: Guide): boolean {
 	return (g as Guide & { is_favorite?: boolean }).is_favorite ?? false;
@@ -36,6 +48,121 @@ function guideIsFavorite(g: Guide): boolean {
 
 function guideCollectionId(g: Guide): string | null {
 	return (g as Guide & { collection_id?: string | null }).collection_id ?? null;
+}
+
+function guideNotes(g: Guide): string | null {
+	return (g as Guide & { notes?: string | null }).notes ?? null;
+}
+
+function compareGuidesForSort(a: Guide, b: Guide, sort: GuideSortKey): number {
+	const favA = guideIsFavorite(a) ? 1 : 0;
+	const favB = guideIsFavorite(b) ? 1 : 0;
+	const dateA = new Date(a.created_at).getTime();
+	const dateB = new Date(b.created_at).getTime();
+	const nameCmp = (a.api_name || '').localeCompare(b.api_name || '', undefined, { sensitivity: 'base' });
+
+	switch (sort) {
+		case 'starred_first':
+			if (favA !== favB) return favB - favA;
+			return dateB - dateA;
+		case 'name_asc':
+			return nameCmp || dateB - dateA;
+		case 'name_desc':
+			return -nameCmp || dateB - dateA;
+		case 'date_desc':
+			return dateB - dateA || nameCmp;
+		case 'date_asc':
+			return dateA - dateB || nameCmp;
+		case 'views_desc':
+			return b.view_count - a.view_count || dateB - dateA;
+		case 'views_asc':
+			return a.view_count - b.view_count || dateB - dateA;
+		default:
+			return 0;
+	}
+}
+
+function sortGuidesList(list: Guide[], sort: GuideSortKey): Guide[] {
+	return [...list].sort((a, b) => compareGuidesForSort(a, b, sort));
+}
+
+function GuideNotesField({
+	guideId,
+	initialNotes,
+	disabled,
+	onSave,
+}: {
+	guideId: string;
+	initialNotes: string | null;
+	disabled?: boolean;
+	onSave: (id: string, notes: string | null) => Promise<boolean>;
+}) {
+	const [value, setValue] = useState(() => initialNotes ?? '');
+	useEffect(() => {
+		setValue(initialNotes ?? '');
+	}, [guideId, initialNotes]);
+
+	const savedNorm =
+		(initialNotes ?? '').trim() === '' ? null : (initialNotes ?? '').trim();
+	const draftNorm = value.trim() === '' ? null : value.trim();
+	const isDirty = draftNorm !== savedNorm;
+
+	const handleSaveNote = async () => {
+		if (!isDirty) return;
+		const next = draftNorm;
+		const ok = await onSave(guideId, next);
+		if (ok) {
+			toast.success('Note saved');
+		} else {
+			setValue(initialNotes ?? '');
+		}
+	};
+
+	return (
+		<div className="space-y-1.5 pt-1 sm:max-w-xl">
+			<label htmlFor={`notes-${guideId}`} className="text-xs font-medium text-muted-foreground">
+				Note
+			</label>
+			<Textarea
+				id={`notes-${guideId}`}
+				value={value}
+				disabled={disabled}
+				onChange={(e) => setValue(e.target.value.slice(0, NOTE_MAX_LEN))}
+				onKeyDown={(e) => {
+					if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+						e.preventDefault();
+						void handleSaveNote();
+					}
+				}}
+				placeholder="Private note (only you)…"
+				rows={2}
+				maxLength={NOTE_MAX_LEN}
+				className="min-h-[4.5rem] resize-y text-sm"
+			/>
+			<div className="flex flex-wrap items-center justify-between gap-2">
+				<p className="text-[10px] text-muted-foreground tabular-nums">
+					{value.length}/{NOTE_MAX_LEN}
+				</p>
+				<div className="flex items-center gap-2">
+					<span className="text-[10px] text-muted-foreground hidden sm:inline">
+						⌘/Ctrl+Enter to save
+					</span>
+					<Button
+						type="button"
+						size="sm"
+						variant={isDirty && !disabled ? 'default' : 'secondary'}
+						className={
+							isDirty && !disabled ? 'shadow-sm shadow-primary/25' : undefined
+						}
+						disabled={!isDirty || disabled}
+						onClick={() => void handleSaveNote()}
+					>
+						Save note
+					</Button>
+				</div>
+			</div>
+		</div>
+	);
 }
 
 interface DashboardContentProps {
@@ -65,6 +192,8 @@ export function DashboardContent({
 	const [guideSearch, setGuideSearch] = useState('');
 	const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
 	const [bulkBusy, setBulkBusy] = useState(false);
+	const [guideSort, setGuideSort] = useState<GuideSortKey>('date_desc');
+	const [savingNoteId, setSavingNoteId] = useState<string | null>(null);
 	const selectAllRef = useRef<HTMLInputElement>(null);
 
 	const filteredGuides = useMemo(() => {
@@ -85,13 +214,19 @@ export function DashboardContent({
 		return filteredGuides.filter((g) => {
 			const name = (g.api_name ?? '').toLowerCase();
 			const url = (g.spec_url ?? '').toLowerCase();
-			return name.includes(searchNorm) || url.includes(searchNorm);
+			const note = (guideNotes(g) ?? '').toLowerCase();
+			return name.includes(searchNorm) || url.includes(searchNorm) || note.includes(searchNorm);
 		});
 	}, [filteredGuides, searchNorm]);
 
+	const displayedGuides = useMemo(
+		() => sortGuidesList(searchFilteredGuides, guideSort),
+		[searchFilteredGuides, guideSort],
+	);
+
 	/** Drop selections that are no longer visible (filter/search changed). */
 	useEffect(() => {
-		const visible = new Set(searchFilteredGuides.map((g) => g.id));
+		const visible = new Set(displayedGuides.map((g) => g.id));
 		setSelectedIds((prev) => {
 			const next = new Set<string>();
 			for (const id of prev) {
@@ -105,9 +240,9 @@ export function DashboardContent({
 			}
 			return next;
 		});
-	}, [searchFilteredGuides]);
+	}, [displayedGuides]);
 
-	const visibleIds = useMemo(() => searchFilteredGuides.map((g) => g.id), [searchFilteredGuides]);
+	const visibleIds = useMemo(() => displayedGuides.map((g) => g.id), [displayedGuides]);
 	const selectedVisibleCount = useMemo(
 		() => visibleIds.filter((id) => selectedIds.has(id)).length,
 		[visibleIds, selectedIds],
@@ -229,6 +364,21 @@ export function DashboardContent({
 			prev.map((g) => (g.id === guide.id ? ({ ...g, is_favorite: next } as Guide) : g)),
 		);
 		toast.success(next ? 'Added to starred' : 'Removed from starred');
+	}, []);
+
+	const handleNoteSave = useCallback(async (guideId: string, notes: string | null) => {
+		setSavingNoteId(guideId);
+		const supabase = createClient();
+		const { error } = await supabase.from('guides').update({ notes }).eq('id', guideId);
+		setSavingNoteId(null);
+		if (error) {
+			toast.error(error.message || 'Could not save note');
+			return false;
+		}
+		setGuides((prev) =>
+			prev.map((g) => (g.id === guideId ? ({ ...g, notes } as Guide) : g)),
+		);
+		return true;
 	}, []);
 
 	const handleCollectionChange = useCallback(
@@ -404,11 +554,31 @@ export function DashboardContent({
 									/>
 									<Input
 										type="search"
-										placeholder="Search by name or spec URL…"
+										placeholder="Search name, URL, or note…"
 										value={guideSearch}
 										onChange={(e) => setGuideSearch(e.target.value)}
 										className="pl-9"
 										aria-label="Search guides"
+									/>
+								</div>
+								<div className="relative w-full sm:max-w-[13rem]">
+									<select
+										className="w-full appearance-none rounded-md border border-input bg-background py-2 pl-3 pr-9 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+										value={guideSort}
+										onChange={(e) => setGuideSort(e.target.value as GuideSortKey)}
+										aria-label="Sort guides"
+									>
+										<option value="starred_first">Starred first</option>
+										<option value="date_desc">Newest first</option>
+										<option value="date_asc">Oldest first</option>
+										<option value="name_asc">Name (A–Z)</option>
+										<option value="name_desc">Name (Z–A)</option>
+										<option value="views_desc">Most views</option>
+										<option value="views_asc">Fewest views</option>
+									</select>
+									<ChevronDown
+										className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+										aria-hidden
 									/>
 								</div>
 								<Button
@@ -531,7 +701,7 @@ export function DashboardContent({
 			) : searchFilteredGuides.length === 0 ? (
 				<Card className="border-dashed">
 					<CardContent className="py-10 text-center text-muted-foreground">
-						No guides match your search. Try a different name or URL.
+						No guides match your search. Try a different name, URL, or note.
 					</CardContent>
 				</Card>
 			) : (
@@ -606,7 +776,7 @@ export function DashboardContent({
 							</Button>
 						</div>
 					</div>
-					{searchFilteredGuides.map((guide) => (
+					{displayedGuides.map((guide) => (
 						<Card
 							key={guide.id}
 							className="hover:border-primary/30 hover:shadow-md transition-all duration-200 shadow-sm"
@@ -691,6 +861,12 @@ export function DashboardContent({
 													/>
 												</div>
 											</div>
+											<GuideNotesField
+												guideId={guide.id}
+												initialNotes={guideNotes(guide)}
+												disabled={savingNoteId === guide.id}
+												onSave={handleNoteSave}
+											/>
 										</div>
 									</div>
 									<div className="flex items-center gap-1 shrink-0 flex-wrap justify-end lg:justify-start lg:pt-0.5">

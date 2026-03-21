@@ -36,6 +36,7 @@ export interface Database {
 					view_count: number;
 					is_favorite: boolean;
 					collection_id: string | null;
+					notes: string | null;
 				};
 				Insert: {
 					id?: string;
@@ -48,6 +49,7 @@ export interface Database {
 					view_count?: number;
 					is_favorite?: boolean;
 					collection_id?: string | null;
+					notes?: string | null;
 				};
 				Update: {
 					id?: string;
@@ -60,6 +62,7 @@ export interface Database {
 					view_count?: number;
 					is_favorite?: boolean;
 					collection_id?: string | null;
+					notes?: string | null;
 				};
 				Relationships: [];
 			};
