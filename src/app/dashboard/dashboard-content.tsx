@@ -97,10 +97,8 @@ function GuideNotesField({
 	disabled?: boolean;
 	onSave: (id: string, notes: string | null) => Promise<boolean>;
 }) {
+	// Initial value only; parent remounts via key when guide.id or saved notes change.
 	const [value, setValue] = useState(() => initialNotes ?? '');
-	useEffect(() => {
-		setValue(initialNotes ?? '');
-	}, [guideId, initialNotes]);
 
 	const savedNorm =
 		(initialNotes ?? '').trim() === '' ? null : (initialNotes ?? '').trim();
@@ -862,6 +860,7 @@ export function DashboardContent({
 												</div>
 											</div>
 											<GuideNotesField
+												key={`${guide.id}-${guideNotes(guide) ?? ''}`}
 												guideId={guide.id}
 												initialNotes={guideNotes(guide)}
 												disabled={savingNoteId === guide.id}
