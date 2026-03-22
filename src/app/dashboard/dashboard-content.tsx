@@ -18,73 +18,22 @@ import {
 	Zap,
 } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useState } from 'react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { createClient } from '@/lib/supabase/client';
+import {
+	guideCollectionId,
+	guideIsFavorite,
+	guideNotes,
+	NOTE_MAX_LEN,
+	type GuideSortKey,
+} from '@/app/dashboard/dashboard-utils';
+import { useDashboardLogic } from '@/app/dashboard/use-dashboard-logic';
 import type { Collection, Guide } from '@/lib/supabase/types';
-
-type FilterKey = 'all' | 'starred' | 'uncollected' | `collection:${string}`;
-
-type GuideSortKey =
-	| 'starred_first'
-	| 'name_asc'
-	| 'name_desc'
-	| 'date_desc'
-	| 'date_asc'
-	| 'views_desc'
-	| 'views_asc';
-
-const NOTE_MAX_LEN = 500;
-
-function guideIsFavorite(g: Guide): boolean {
-	return (g as Guide & { is_favorite?: boolean }).is_favorite ?? false;
-}
-
-function guideCollectionId(g: Guide): string | null {
-	return (g as Guide & { collection_id?: string | null }).collection_id ?? null;
-}
-
-function guideNotes(g: Guide): string | null {
-	return (g as Guide & { notes?: string | null }).notes ?? null;
-}
-
-function compareGuidesForSort(a: Guide, b: Guide, sort: GuideSortKey): number {
-	const favA = guideIsFavorite(a) ? 1 : 0;
-	const favB = guideIsFavorite(b) ? 1 : 0;
-	const dateA = new Date(a.created_at).getTime();
-	const dateB = new Date(b.created_at).getTime();
-	const nameCmp = (a.api_name || '').localeCompare(b.api_name || '', undefined, { sensitivity: 'base' });
-
-	switch (sort) {
-		case 'starred_first':
-			if (favA !== favB) return favB - favA;
-			return dateB - dateA;
-		case 'name_asc':
-			return nameCmp || dateB - dateA;
-		case 'name_desc':
-			return -nameCmp || dateB - dateA;
-		case 'date_desc':
-			return dateB - dateA || nameCmp;
-		case 'date_asc':
-			return dateA - dateB || nameCmp;
-		case 'views_desc':
-			return b.view_count - a.view_count || dateB - dateA;
-		case 'views_asc':
-			return a.view_count - b.view_count || dateB - dateA;
-		default:
-			return 0;
-	}
-}
-
-function sortGuidesList(list: Guide[], sort: GuideSortKey): Guide[] {
-	return [...list].sort((a, b) => compareGuidesForSort(a, b, sort));
-}
 
 function GuideNotesField({
 	guideId,
@@ -174,310 +123,53 @@ export function DashboardContent({
 	guides: initialGuides,
 	collections: initialCollections,
 }: DashboardContentProps) {
-	const router = useRouter();
-	const [guides, setGuides] = useState(initialGuides);
-	const [collections, setCollections] = useState(initialCollections);
-	const [deletingId, setDeletingId] = useState<string | null>(null);
-	const [copiedSlug, setCopiedSlug] = useState<string | null>(null);
-	const [filter, setFilter] = useState<FilterKey>('all');
-	const [collectionDialogOpen, setCollectionDialogOpen] = useState(false);
-	const [newCollectionName, setNewCollectionName] = useState('');
-	const [creatingCollection, setCreatingCollection] = useState(false);
-	const [deletingCollectionId, setDeletingCollectionId] = useState<string | null>(null);
-	const [renamingCollection, setRenamingCollection] = useState<{ id: string; name: string } | null>(null);
-	const [renameCollectionName, setRenameCollectionName] = useState('');
-	const [savingRename, setSavingRename] = useState(false);
-	const [guideSearch, setGuideSearch] = useState('');
-	const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
-	const [bulkBusy, setBulkBusy] = useState(false);
-	const [guideSort, setGuideSort] = useState<GuideSortKey>('date_desc');
-	const [savingNoteId, setSavingNoteId] = useState<string | null>(null);
-	const selectAllRef = useRef<HTMLInputElement>(null);
-
-	const filteredGuides = useMemo(() => {
-		if (filter === 'all') return guides;
-		if (filter === 'starred') return guides.filter((g) => guideIsFavorite(g));
-		if (filter === 'uncollected') return guides.filter((g) => !guideCollectionId(g));
-		if (filter.startsWith('collection:')) {
-			const id = filter.slice('collection:'.length);
-			return guides.filter((g) => guideCollectionId(g) === id);
-		}
-		return guides;
-	}, [guides, filter]);
-
-	const searchNorm = guideSearch.trim().toLowerCase();
-
-	const searchFilteredGuides = useMemo(() => {
-		if (!searchNorm) return filteredGuides;
-		return filteredGuides.filter((g) => {
-			const name = (g.api_name ?? '').toLowerCase();
-			const url = (g.spec_url ?? '').toLowerCase();
-			const note = (guideNotes(g) ?? '').toLowerCase();
-			return name.includes(searchNorm) || url.includes(searchNorm) || note.includes(searchNorm);
-		});
-	}, [filteredGuides, searchNorm]);
-
-	const displayedGuides = useMemo(
-		() => sortGuidesList(searchFilteredGuides, guideSort),
-		[searchFilteredGuides, guideSort],
-	);
-
-	/** Drop selections that are no longer visible (filter/search changed). */
-	useEffect(() => {
-		const visible = new Set(displayedGuides.map((g) => g.id));
-		setSelectedIds((prev) => {
-			const next = new Set<string>();
-			for (const id of prev) {
-				if (visible.has(id)) next.add(id);
-			}
-			if (next.size === prev.size) {
-				for (const id of prev) {
-					if (!next.has(id)) return next;
-				}
-				return prev;
-			}
-			return next;
-		});
-	}, [displayedGuides]);
-
-	const visibleIds = useMemo(() => displayedGuides.map((g) => g.id), [displayedGuides]);
-	const selectedVisibleCount = useMemo(
-		() => visibleIds.filter((id) => selectedIds.has(id)).length,
-		[visibleIds, selectedIds],
-	);
-	const allVisibleSelected =
-		visibleIds.length > 0 && selectedVisibleCount === visibleIds.length;
-
-	useEffect(() => {
-		const el = selectAllRef.current;
-		if (!el) return;
-		el.indeterminate = selectedVisibleCount > 0 && !allVisibleSelected;
-	}, [selectedVisibleCount, allVisibleSelected]);
-
-	const toggleGuideSelected = useCallback((id: string) => {
-		setSelectedIds((prev) => {
-			const next = new Set(prev);
-			if (next.has(id)) next.delete(id);
-			else next.add(id);
-			return next;
-		});
-	}, []);
-
-	const toggleSelectAllVisible = useCallback(() => {
-		setSelectedIds((prev) => {
-			const next = new Set(prev);
-			if (allVisibleSelected) {
-				for (const id of visibleIds) next.delete(id);
-			} else {
-				for (const id of visibleIds) next.add(id);
-			}
-			return next;
-		});
-	}, [allVisibleSelected, visibleIds]);
-
-	const clearSelection = useCallback(() => {
-		setSelectedIds(new Set());
-	}, []);
-
-	const handleBulkCollectionChange = useCallback(
-		async (collectionId: string | null) => {
-			const ids = [...selectedIds];
-			if (ids.length === 0) return;
-			setBulkBusy(true);
-			const supabase = createClient();
-			const { error } = await supabase
-				.from('guides')
-				.update({ collection_id: collectionId })
-				.in('id', ids);
-			setBulkBusy(false);
-			if (error) {
-				toast.error(error.message || 'Could not update guides');
-				return;
-			}
-			setGuides((prev) =>
-				prev.map((g) =>
-					ids.includes(g.id) ? ({ ...g, collection_id: collectionId } as Guide) : g,
-				),
-			);
-			setSelectedIds(new Set());
-			toast.success(
-				collectionId
-					? `Moved ${ids.length} guide${ids.length === 1 ? '' : 's'} to collection`
-					: `Removed ${ids.length} guide${ids.length === 1 ? '' : 's'} from collection`,
-			);
-		},
-		[selectedIds],
-	);
-
-	const handleLogout = useCallback(async () => {
-		const supabase = createClient();
-		await supabase.auth.signOut();
-		router.push('/');
-		router.refresh();
-	}, [router]);
-
-	const handleDelete = useCallback(async (guide: Guide) => {
-		if (!window.confirm(`Delete “${guide.api_name}”? This guide will be removed from your dashboard.`)) {
-			return;
-		}
-		setDeletingId(guide.id);
-		const supabase = createClient();
-		const { error } = await supabase.from('guides').delete().eq('id', guide.id);
-		setDeletingId(null);
-		if (error) {
-			toast.error(error.message || 'Could not delete guide');
-			return;
-		}
-		setGuides((prev) => prev.filter((g) => g.id !== guide.id));
-		setSelectedIds((prev) => {
-			if (!prev.has(guide.id)) return prev;
-			const next = new Set(prev);
-			next.delete(guide.id);
-			return next;
-		});
-		toast.success('Guide deleted');
-	}, []);
-
-	const handleCopyLink = useCallback(async (slug: string) => {
-		const url = `${window.location.origin}/g/${slug}`;
-		await navigator.clipboard.writeText(url);
-		setCopiedSlug(slug);
-		toast.success('Link copied to clipboard');
-		setTimeout(() => setCopiedSlug(null), 2000);
-	}, []);
-
-	const handleToggleFavorite = useCallback(async (guide: Guide) => {
-		const next = !guideIsFavorite(guide);
-		const supabase = createClient();
-		const { error } = await supabase
-			.from('guides')
-			.update({ is_favorite: next })
-			.eq('id', guide.id);
-
-		if (error) {
-			toast.error(error.message || 'Could not update');
-			return;
-		}
-		setGuides((prev) =>
-			prev.map((g) => (g.id === guide.id ? ({ ...g, is_favorite: next } as Guide) : g)),
-		);
-		toast.success(next ? 'Added to starred' : 'Removed from starred');
-	}, []);
-
-	const handleNoteSave = useCallback(async (guideId: string, notes: string | null) => {
-		setSavingNoteId(guideId);
-		const supabase = createClient();
-		const { error } = await supabase.from('guides').update({ notes }).eq('id', guideId);
-		setSavingNoteId(null);
-		if (error) {
-			toast.error(error.message || 'Could not save note');
-			return false;
-		}
-		setGuides((prev) =>
-			prev.map((g) => (g.id === guideId ? ({ ...g, notes } as Guide) : g)),
-		);
-		return true;
-	}, []);
-
-	const handleCollectionChange = useCallback(
-		async (guideId: string, collectionId: string | null) => {
-			const supabase = createClient();
-			const { error } = await supabase
-				.from('guides')
-				.update({ collection_id: collectionId })
-				.eq('id', guideId);
-
-			if (error) {
-				toast.error(error.message || 'Could not move guide');
-				return;
-			}
-			setGuides((prev) =>
-				prev.map((g) => (g.id === guideId ? ({ ...g, collection_id: collectionId } as Guide) : g)),
-			);
-			toast.success(collectionId ? 'Moved to collection' : 'Removed from collection');
-		},
-		[],
-	);
-
-	const handleCreateCollection = useCallback(async () => {
-		const name = newCollectionName.trim();
-		if (!name) return;
-		setCreatingCollection(true);
-		const supabase = createClient();
-		const { data, error } = await supabase
-			.from('collections')
-			.insert({ user_id: user.id, name })
-			.select()
-			.single();
-
-		setCreatingCollection(false);
-		if (error) {
-			toast.error(error.message || 'Could not create collection');
-			return;
-		}
-		setCollections((prev) => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
-		setNewCollectionName('');
-		setCollectionDialogOpen(false);
-		toast.success('Collection created');
-	}, [newCollectionName, user.id]);
-
-	const handleDeleteCollection = useCallback(
-		async (c: { id: string; name: string }) => {
-			if (
-				!window.confirm(
-					`Delete '${c.name}'? Guides in this collection will be moved to 'No collection'.`,
-				)
-			) {
-				return;
-			}
-			setDeletingCollectionId(c.id);
-			const supabase = createClient();
-			const { error } = await supabase.from('collections').delete().eq('id', c.id);
-			setDeletingCollectionId(null);
-			if (error) {
-				toast.error(error.message || 'Could not delete collection');
-				return;
-			}
-			setCollections((prev) => prev.filter((x) => x.id !== c.id));
-			setGuides((prev) =>
-				prev.map((g) =>
-					guideCollectionId(g) === c.id ? ({ ...g, collection_id: null } as Guide) : g,
-				),
-			);
-			if (filter === `collection:${c.id}`) {
-				setFilter('all');
-			}
-			toast.success('Collection deleted');
-		},
-		[filter],
-	);
-
-	const handleRenameCollection = useCallback(async () => {
-		if (!renamingCollection || !renameCollectionName.trim()) return;
-		const name = renameCollectionName.trim();
-		if (name === renamingCollection.name) {
-			setRenamingCollection(null);
-			setRenameCollectionName('');
-			return;
-		}
-		setSavingRename(true);
-		const supabase = createClient();
-		const { error } = await supabase
-			.from('collections')
-			.update({ name })
-			.eq('id', renamingCollection.id);
-		setSavingRename(false);
-		if (error) {
-			toast.error(error.message || 'Could not rename collection');
-			return;
-		}
-		setCollections((prev) =>
-			prev.map((c) => (c.id === renamingCollection.id ? { ...c, name } : c)).sort((a, b) => a.name.localeCompare(b.name)),
-		);
-		setRenamingCollection(null);
-		setRenameCollectionName('');
-		toast.success('Collection renamed');
-	}, [renamingCollection, renameCollectionName]);
+	const {
+		guides,
+		collections,
+		filter,
+		setFilter,
+		guideSearch,
+		setGuideSearch,
+		guideSort,
+		setGuideSort,
+		selectedGuideIds,
+		bulkBusy,
+		copiedSlug,
+		deletingId,
+		savingNoteId,
+		collectionDialogOpen,
+		setCollectionDialogOpen,
+		newCollectionName,
+		setNewCollectionName,
+		creatingCollection,
+		deletingCollectionId,
+		renamingCollection,
+		renameCollectionName,
+		setRenameCollectionName,
+		savingRename,
+		openRenameCollection,
+		closeRenameCollection,
+		filteredGuides,
+		searchFilteredGuides,
+		displayedGuides,
+		selectAllRef,
+		allVisibleSelected,
+		toggleSelectAllVisible,
+		toggleGuideSelected,
+		clearSelection,
+		handleBulkCollectionChange,
+		handleLogout,
+		handleDelete,
+		handleCopyLink,
+		handleToggleFavorite,
+		handleNoteSave,
+		handleCollectionChange,
+		handleCreateCollection,
+		handleDeleteCollection,
+		handleRenameCollection,
+		starredCount,
+		uncollectedCount,
+	} = useDashboardLogic({ user, initialGuides, initialCollections });
 
 	const formatDate = (date: string) => {
 		return new Date(date).toLocaleDateString('en-US', {
@@ -486,9 +178,6 @@ export function DashboardContent({
 			year: 'numeric',
 		});
 	};
-
-	const starredCount = guides.filter((g) => guideIsFavorite(g)).length;
-	const uncollectedCount = guides.filter((g) => !guideCollectionId(g)).length;
 
 	return (
 		<div className="max-w-5xl mx-auto space-y-8">
@@ -638,8 +327,7 @@ export function DashboardContent({
 										aria-label={`Rename collection ${c.name}`}
 										onClick={(e) => {
 											e.stopPropagation();
-											setRenamingCollection({ id: c.id, name: c.name });
-											setRenameCollectionName(c.name);
+											openRenameCollection(c);
 										}}
 									>
 										<Pencil className="h-3.5 w-3.5" />
@@ -715,9 +403,9 @@ export function DashboardContent({
 								aria-label="Select all visible guides"
 							/>
 							<span className="text-muted-foreground whitespace-nowrap">
-								{selectedIds.size > 0 ? (
+								{selectedGuideIds.length > 0 ? (
 									<>
-										<span className="font-medium text-foreground">{selectedIds.size}</span>{' '}
+										<span className="font-medium text-foreground">{selectedGuideIds.length}</span>{' '}
 										selected
 									</>
 								) : (
@@ -731,7 +419,7 @@ export function DashboardContent({
 								variant="ghost"
 								size="sm"
 								className="h-8"
-								disabled={selectedIds.size === 0}
+								disabled={selectedGuideIds.length === 0}
 								onClick={clearSelection}
 							>
 								Clear
@@ -739,7 +427,7 @@ export function DashboardContent({
 							<div className="relative min-w-[10rem] sm:min-w-[12rem]">
 								<select
 									className="w-full appearance-none rounded-md border border-input bg-background py-1.5 pl-2 pr-8 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-									disabled={selectedIds.size === 0 || bulkBusy || collections.length === 0}
+									disabled={selectedGuideIds.length === 0 || bulkBusy || collections.length === 0}
 									value=""
 									aria-label="Move selected guides to collection"
 									onChange={(e) => {
@@ -767,7 +455,7 @@ export function DashboardContent({
 								variant="outline"
 								size="sm"
 								className="h-8"
-								disabled={selectedIds.size === 0 || bulkBusy}
+								disabled={selectedGuideIds.length === 0 || bulkBusy}
 								onClick={() => handleBulkCollectionChange(null)}
 							>
 								Remove from collection
@@ -785,7 +473,7 @@ export function DashboardContent({
 										<div className="flex items-start gap-1 shrink-0 pt-0.5">
 											<input
 												type="checkbox"
-												checked={selectedIds.has(guide.id)}
+												checked={selectedGuideIds.includes(guide.id)}
 												onChange={() => toggleGuideSelected(guide.id)}
 												className="size-4 mt-1.5 rounded border border-input accent-primary cursor-pointer"
 												aria-label={`Select ${guide.api_name}`}
@@ -955,19 +643,12 @@ export function DashboardContent({
 								onKeyDown={(e) => {
 									if (e.key === 'Enter') handleRenameCollection();
 									if (e.key === 'Escape') {
-										setRenamingCollection(null);
-										setRenameCollectionName('');
+										closeRenameCollection();
 									}
 								}}
 							/>
 							<div className="flex gap-2 justify-end">
-								<Button
-									variant="outline"
-									onClick={() => {
-										setRenamingCollection(null);
-										setRenameCollectionName('');
-									}}
-								>
+								<Button variant="outline" onClick={closeRenameCollection}>
 									Cancel
 								</Button>
 								<Button
